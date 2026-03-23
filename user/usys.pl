@@ -36,4 +36,8 @@ entry("getpid");
 entry("sbrk");
 entry("sleep");
 entry("uptime");
+<<<<<<< HEAD
 entry("getproc");
+=======
+entry("trace");
+>>>>>>> 7a4e9dce175d939b54b60317b70e70eb961ffe8f

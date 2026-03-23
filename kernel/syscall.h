@@ -21,3 +21,5 @@
 #define SYS_mkdir  20
 #define SYS_close  21
 #define SYS_getproc 22 // add getproc system call number, new system call 
+#define SYS_trace  23 // add trace system call number, new system call
+

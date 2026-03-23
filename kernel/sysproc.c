@@ -95,6 +95,7 @@ sys_uptime(void)
   return xticks;
 }
 
+<<<<<<< HEAD
 // /// @brief Get process information base on PID provided by User
 // /// @param pid Process ID
 // /// @param info_addr Address to store process information
@@ -214,5 +215,13 @@ sys_getproc(void)
   if(copyout(curproc->pagetable, info_addr, (char *)&info, sizeof(info)) < 0)
     return -1;
 
+=======
+uint64
+sys_trace(void)
+{
+  int mask;
+  argint(0, &mask);
+  myproc()->tracemask = mask;
+>>>>>>> 7a4e9dce175d939b54b60317b70e70eb961ffe8f
   return 0;
 }
