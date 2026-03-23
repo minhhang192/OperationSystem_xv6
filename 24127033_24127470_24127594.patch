@@ -1,0 +1,609 @@
+diff --git a/24127033_24127470_24127594.patch b/24127033_24127470_24127594.patch
+new file mode 100644
+index 0000000..e69de29
+diff --git a/Makefile b/Makefile
+index 74e454f..e9f704d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -190,10 +190,14 @@ UPROGS=\
+ 	$U/_rm\
+ 	$U/_sh\
+ 	$U/_stressfs\
++	$U/_trace\
+ 	$U/_usertests\
+ 	$U/_grind\
+ 	$U/_wc\
+ 	$U/_zombie\
++	$U/_xargs\
++    $U/_tree\
++	$U/_test_getproc\
+ 
+ 
+ 
+diff --git a/kernel/proc.c b/kernel/proc.c
+index 130d9ce..0199136 100644
+--- a/kernel/proc.c
++++ b/kernel/proc.c
+@@ -320,8 +320,8 @@ fork(void)
+ 
+   acquire(&np->lock);
+   np->state = RUNNABLE;
++  np->tracemask = p->tracemask;
+   release(&np->lock);
+-
+   return pid;
+ }
+ 
+diff --git a/kernel/proc.h b/kernel/proc.h
+index d021857..0315299 100644
+--- a/kernel/proc.h
++++ b/kernel/proc.h
+@@ -104,4 +104,5 @@ struct proc {
+   struct file *ofile[NOFILE];  // Open files
+   struct inode *cwd;           // Current directory
+   char name[16];               // Process name (debugging)
++  int tracemask; //add
+ };
+diff --git a/kernel/syscall.c b/kernel/syscall.c
+index ed65409..d6b5870 100644
+--- a/kernel/syscall.c
++++ b/kernel/syscall.c
+@@ -101,6 +101,8 @@ extern uint64 sys_unlink(void);
+ extern uint64 sys_link(void);
+ extern uint64 sys_mkdir(void);
+ extern uint64 sys_close(void);
++extern uint64 sys_trace(void);
++extern uint64 sys_getproc(void);
+ 
+ // An array mapping syscall numbers from syscall.h
+ // to the function that handles the system call.
+@@ -126,6 +128,34 @@ static uint64 (*syscalls[])(void) = {
+ [SYS_link]    sys_link,
+ [SYS_mkdir]   sys_mkdir,
+ [SYS_close]   sys_close,
++[SYS_trace]   sys_trace,
++[SYS_getproc] sys_getproc,
++};
++
++static char *sysnames[] = {
++  [SYS_fork]    = "fork",
++  [SYS_exit]    = "exit",
++  [SYS_wait]    = "wait",
++  [SYS_pipe]    = "pipe",
++  [SYS_read]    = "read",
++  [SYS_kill]    = "kill",
++  [SYS_exec]    = "exec",
++  [SYS_fstat]   = "fstat",
++  [SYS_chdir]   = "chdir",
++  [SYS_dup]     = "dup",
++  [SYS_getpid]  = "getpid",
++  [SYS_sbrk]    = "sbrk",
++  [SYS_sleep]   = "sleep",
++  [SYS_uptime]  = "uptime",
++  [SYS_open]    = "open",
++  [SYS_write]   = "write",
++  [SYS_mknod]   = "mknod",
++  [SYS_unlink]  = "unlink",
++  [SYS_link]    = "link",
++  [SYS_mkdir]   = "mkdir",
++  [SYS_close]   = "close",
++  [SYS_trace]   = "trace",
++
+ };
+ 
+ void
+@@ -139,6 +169,12 @@ syscall(void)
+     // Use num to lookup the system call function for num, call it,
+     // and store its return value in p->trapframe->a0
+     p->trapframe->a0 = syscalls[num]();
++    if((p->tracemask & (1 << num)) != 0) {
++      printf("%d: syscall %s -> %d\n",
++             p->pid,
++             sysnames[num] ? sysnames[num] : "unknown",
++             (int)p->trapframe->a0);   
++    }
+   } else {
+     printf("%d %s: unknown sys call %d\n",
+             p->pid, p->name, num);
+diff --git a/kernel/syscall.h b/kernel/syscall.h
+index bc5f356..294c003 100644
+--- a/kernel/syscall.h
++++ b/kernel/syscall.h
+@@ -20,3 +20,5 @@
+ #define SYS_link   19
+ #define SYS_mkdir  20
+ #define SYS_close  21
++#define SYS_trace  22
++#define SYS_getproc 23
+diff --git a/kernel/sysproc.c b/kernel/sysproc.c
+index 3b4d5bd..b00414f 100644
+--- a/kernel/sysproc.c
++++ b/kernel/sysproc.c
+@@ -5,7 +5,9 @@
+ #include "memlayout.h"
+ #include "spinlock.h"
+ #include "proc.h"
++#include "user/procinfo.h"
+ 
++extern struct proc proc[NPROC];
+ uint64
+ sys_exit(void)
+ {
+@@ -91,3 +93,132 @@ sys_uptime(void)
+   release(&tickslock);
+   return xticks;
+ }
++
++uint64
++sys_trace(void)
++{
++  int mask;
++  argint(0, &mask);
++  myproc()->tracemask = mask;
++  return 0;
++}
++// /// @brief Get process information base on PID provided by User
++// /// @param pid Process ID
++// /// @param info_addr Address to store process information
++// /// @return 0 on success, -1 on failure
++// uint64 sys_getproc(void){
++//   int pid; // Process ID
++//   uint64 info_addr; // Address to store process information
++//   struct procinfo info; // Struct to hold process information
++
++//   argint(0, &pid); // Get the PID address provided by User
++//   // Khi bạn truyền một struct hoặc một mảng từ User vào Kernel 
++//   // bạn không truyền cả khối dữ liệu đó được. Bạn chỉ truyền địa chỉ của con trỏ của khối dữ liệu đó
++//   // Kernel sẽ sử dụng địa chỉ đó để copy dữ liệu từ User space vào Kernel space hoặc ngược lại. bằng copyin hoặc copyout
++//   argaddr(1, &info_addr); // Struct procinfo address provided by user will be stored in info_addr
++
++//   struct proc *p = myproc(); // Get the current process
++//   struct proc *target = 0; // Pointer to the target process whose information we want to get
++
++//   //acquire(&p -> lock);
++//   // Giữ lock của process hiện tại để đảm bảo an toàn khi truy cập thông tin process
++//   // Khi một CPU gọi lệnh acquire, nó sẽ kiểm tra xem lock đã được giữ bởi một CPU khác chưa. 
++//   //Nếu lock đã được giữ, CPU sẽ bị chặn (blocked) cho đến khi lock được giải phóng. 
++//   //Khi lock được giải phóng, một trong số các CPU đang chờ sẽ được chọn để tiếp tục và giữ lock đó. 
++//   //Điều này đảm bảo rằng chỉ có một CPU có thể giữ lock tại một thời điểm, 
++//   //giúp tránh xung đột và đảm bảo tính nhất quán của dữ liệu khi nhiều CPU truy cập cùng một tài nguyên. 
++
++//   // Tìm process có PID bằng với PID mà User truyền lên trong hệ thống
++//   // Duyệt qua danh sách process của hệ thống để tìm process có PID bằng với PID mà User truyền lên
++//   // struct proc *pp = p: khởi tạo con trỏ pp trỏ đến process hiện tại p.
++//   // pp != 0: điều kiện tiếp tục vòng lặp, đảm bảo rằng pp không phải là con trỏ null (tức là vẫn còn process để kiểm tra).
++//   // pp = pp->parent: sau mỗi lần lặp, con trỏ pp sẽ nhảy lên một nấc cao hơn trong cây process, 
++//   // tức là sẽ kiểm tra process cha của process hiện tại.
++//   for(struct proc *pp = p; pp < &proc[NPROC]; pp = pp -> parent){
++//     acquire(&pp -> lock); // Giữ lock của process pp để đảm bảo an toàn khi truy cập thông tin process pp
++//     if(pp -> pid == pid){ // Nếu tìm thấy process có PID bằng với PID mà User truyền lên
++//       target = pp; // Gán con trỏ target trỏ đến process đó
++//       // Nếu tìm thấy process có PID bằng với PID mà User truyền lên,
++//       // Gán thông tin của process đó vào struct procinfo info
++//       info.pid = target -> pid;
++//       info.ppid = target -> parent ? target -> parent -> pid : -1;
++//       info.state = target -> state;
++//       info.sz = target -> sz;
++//       safestrcpy(info.name, target -> name, sizeof(info.name)); // Sao chép tên process vào struct procinfo, đảm bảo không tràn bộ nhớ
++//       break; 
++//     }
++//     release(&pp -> lock); // Giải phóng lock của process pp sau khi đã lấy thông tin
++//   }
++//   if(target == 0){
++//     //release(&p -> lock);
++//     return -1;
++//   }
++ 
++//   //release(&p -> lock);
++
++//   // p -> pagetable: bảng trang của process hiện tại, được sử dụng để xác định cách ánh xạ địa chỉ ảo sang địa chỉ vật lý.
++//   // info_addr: địa chỉ trong không gian người dùng nơi struct procinfo sẽ được sao chép đến.
++//   // (char *)&info: địa chỉ của struct procinfo trong kernel, được chuyển đổi thành con trỏ char để phù hợp với kiểu dữ liệu mà copyout yêu cầu.
++//   // sizeof(info): kích thước của struct procinfo, được sử dụng để xác định lượng dữ liệu cần sao chép 
++//   // đảm bảo rằng không có tràn bộ nhớ khi sao chép dữ liệu từ kernel space sang user space.
++//   if(copyout(p -> pagetable, info_addr, (char *)&info, sizeof(info)) < 0){
++//     return -1; // Nếu có lỗi khi sao chép thông tin về user space, trả về -1
++//   }
++  
++//   return 0;
++// }
++
++uint64
++sys_getproc(void)
++{
++  int pid; // Process ID 
++  uint64 info_addr; // Address to store process information provided by User
++  struct procinfo info; // Cấu trúc tạm lưu trên kernel stack 
++  struct proc *p; // Con trỏ để duyệt qua bảng tiến trình của hệ thống
++
++  int found = 0; // sentinel để kiểm tra xem đã tìm thấy process có PID yêu cầu hay chưa
++
++  // 1. Lấy các đối số từ không gian người dùng 
++  argint(0, &pid); // Lấy PID từ đối số đầu tiên mà User truyền lên
++  argaddr(1, &info_addr);// Lấy địa chỉ trong không gian người dùng nơi struct procinfo sẽ được sao chép đến từ đối số thứ hai mà User truyền lên
++
++  // 2. Duyệt qua toàn bộ bảng tiến trình hệ thống thay vì chỉ duyệt cây cha con
++  // p = proc: khởi tạo con trỏ p trỏ đến đầu của bảng tiến trình proc.
++  // p < &proc[NPROC]: điều kiện tiếp tục vòng lặp, đảm bảo rằng p vẫn còn trỏ đến một tiến trình hợp lệ trong bảng tiến trình (chưa vượt quá giới hạn NPROC).
++  // p++: sau mỗi lần lặp, con trỏ p sẽ di chuyển đến process tiếp theo trong bảng tiến trình, cho phép kiểm tra tất cả các tiến trình có trong hệ thống.
++  for(p = proc; p < &proc[NPROC]; p++) {
++    acquire(&p->lock); // Bảo vệ các trường state, sz, name khỏi race condition 
++    
++    // Kiểm tra PID và đảm bảo tiến trình không phải ở trạng thái UNUSED
++    if(p->state != UNUSED && p->pid == pid) {
++      found = 1;
++
++      // 3. Trích xuất thông tin vào cấu trúc tạm trong kernel 
++      info.pid = p->pid;
++      // PPID: Nếu không có cha (như init), trả về -1 để an toàn 
++      info.ppid = p->parent ? p->parent->pid : -1;
++      info.state = p->state;
++      info.sz = p->sz;
++      safestrcpy(info.name, p->name, sizeof(info.name));
++
++      release(&p->lock); // Giải phóng ngay sau khi copy xong dữ liệu nhạy cảm
++      break;
++    }
++    release(&p->lock);
++  }
++
++  if(!found)
++    return -1; // Không tìm thấy PID yêu cầu
++
++  // 4. Sử dụng copyout để chuyển dữ liệu sang User Space một cách an toàn 
++  // Hàm này dò bảng trang để đảm bảo info_addr là hợp lệ 
++  // p -> pagetable: bảng trang của process hiện tại, được sử dụng để xác định cách ánh xạ virtual address in user space sang physical address in kernel.
++  // info_addr: địa chỉ trong không gian người dùng nơi struct procinfo sẽ được sao chép đến.
++  // (char *)&info: địa chỉ của struct procinfo trong kernel, được chuyển đổi thành con trỏ char để phù hợp với kiểu dữ liệu mà copyout yêu cầu.
++  // sizeof(info): kích thước của struct procinfo, được sử dụng để xác định lượng dữ liệu cần sao chép 
++  // đảm bảo rằng không có tràn bộ nhớ khi sao chép dữ liệu từ kernel space sang user space.
++  struct proc *curproc = myproc();
++  if(copyout(curproc->pagetable, info_addr, (char *)&info, sizeof(info)) < 0)
++    return -1;
++  return 0;
++}
+\ No newline at end of file
+diff --git a/user/procinfo.h b/user/procinfo.h
+new file mode 100644
+index 0000000..1a77b4d
+--- /dev/null
++++ b/user/procinfo.h
+@@ -0,0 +1,10 @@
++#include "kernel/types.h"
++
++/// @brief Struct save process infomation 
++struct procinfo{
++    int pid; // Process ID
++    int ppid; // Parent Process ID
++    int state; // Process state (e.g., running, sleeping, etc.)
++    uint64 sz; // Size of process memory (in bytes)
++    char name[16]; //Process name (up to 16 characters)
++};
+\ No newline at end of file
+diff --git a/user/test_getproc.c b/user/test_getproc.c
+new file mode 100644
+index 0000000..365dfe3
+--- /dev/null
++++ b/user/test_getproc.c
+@@ -0,0 +1,21 @@
++#include "user.h"
++#include "kernel/types.h"
++#include "procinfo.h"
++
++int main(int argc, char *argv[]){
++    int pid = getpid();
++    struct procinfo info;
++
++    if (getproc(pid, &info) == 0) { // Gọi hệ thống để lấy thông tin process
++        printf("Process Info:\n");
++        printf("PID: %d\n", info.pid);
++        printf("PPID: %d\n", info.ppid);
++        printf("State: %d\n", info.state);
++        printf("Size: %ld bytes\n", info.sz);
++        printf("Name: %s\n", info.name);
++    } else {
++        printf("Failed to get process info for PID %d\n", pid);
++    }
++
++    return 0;
++}
+\ No newline at end of file
+diff --git a/user/trace.c b/user/trace.c
+new file mode 100644
+index 0000000..b94c7f7
+--- /dev/null
++++ b/user/trace.c
+@@ -0,0 +1,29 @@
++#include "kernel/types.h"
++#include "user/user.h"
++#include "kernel/param.h"
++
++int
++main(int argc, char *argv[])
++{
++  int i;
++  char *nargv[MAXARG];
++
++  if(argc < 2 || (argv[1][0] < '0' || argv[1][0] > '9')){
++    fprintf(2, "usage: trace mask command\n");
++    exit(1);
++  }
++
++  if(trace(atoi(argv[1])) < 0){
++    fprintf(2, "trace: trace failed\n");
++    exit(1);
++  }
++
++  for(i = 2; i < argc && i < MAXARG; i++){
++    nargv[i-2] = argv[i];
++  }
++  nargv[argc-2] = 0;   // null terminate
++
++  exec(argv[2], nargv);   // chạy chương trình được trace
++  fprintf(2, "trace: exec failed\n");
++  exit(1);
++}
+\ No newline at end of file
+diff --git a/user/tree.c b/user/tree.c
+new file mode 100644
+index 0000000..58383ef
+--- /dev/null
++++ b/user/tree.c
+@@ -0,0 +1,122 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++#include "kernel/fs.h"
++
++// Tham số: 
++// path: Nơi mà chương trình đang đứng 
++// depth: Độ sâu để in ra các khoảng trắng cho đẹp
++void tree(char *path, int depth) {
++    char buffer[512]; // Mảng 512 bytes chứa đường dẫn của các file con bên trong
++    char *pointer;       // Con trỏ dùng để ghép chuỗi tên file
++    int file_des;        // File Descriptor (con trỏ quản lý file/thư mục)
++    
++    struct dirent dir_entry; // Cấu trúc chứa thông tin của file/thư mục (directory entry)
++    struct stat st;   // Cấu trúc chứa chi tiết xem nó là file hay thư mục (stat)
++
++    // Bước 1: mở thư mục hiện tại (path) để bắt đầu đọc thông tin bên trong
++    if((file_des = open(path, 0)) < 0){
++        fprintf(2, "tree: cannot open %s\n", path);
++        exit(1); 
++    }
++
++    // Bước 2: Lấy thông tin của thư mục hiện tại để biết nó có phải là thư mục hay không
++    if(fstat(file_des, &st) < 0){
++        fprintf(2, "tree: cannot stat %s\n", path);
++        close(file_des);
++        return;
++    }
++
++    // Bước 3: Nếu nó là thư mục thì mới bắt đầu đọc thông tin của các file con bên trong
++    if(st.type == T_DIR){
++        
++        // Nếu đường dẫn lồng nhau quá sâu (> 512 bytes) sẽ làm tràn bộ nhớ
++        // DIRSIZ là kích thước cố định của trường name trong struct dirent (14 bytes)
++        if(strlen(path) + 1 + DIRSIZ + 1 > sizeof(buffer)){
++            printf("tree: path too long\n");
++            close(file_des);    
++            return;
++        }
++
++        // Tạo tiền đề cho đường dẫn con: vd "a" => "a/"
++        strcpy(buffer, path);
++        pointer = buffer + strlen(buffer);
++        *pointer++ = '/'; // Chèn dấu '/' vào cuối và nhích con trỏ p lên 1 nấc
++
++        // Bước 4: Đọc thông tin của từng file con bên trong thư mục hiện tại
++        // dir_entry sẽ chứa thông tin của từng file con (như tên, số inum...)
++        while(read(file_des, &dir_entry, sizeof(dir_entry)) == sizeof(dir_entry)){
++            // inum == 0 nghĩa là file này đã bị user xóa đi rồi, bỏ qua
++            if(dir_entry.inum == 0)
++                continue;
++
++            // Bỏ qua "." (Thư mục hiện hành) và ".." (Thư mục cha)
++            // Nếu không có bước này, đệ quy sẽ chạy lặp vòng tròn vô tận
++            if(strcmp(dir_entry.name, ".") == 0 || strcmp(dir_entry.name, "..") == 0)
++                continue;
++
++            // Dán tên file con vào sau dấu '/'
++            // Vd: Đang có "a/" + tên file con là "b" => Thành "a/b"
++            memmove(pointer, dir_entry.name, DIRSIZ);
++            pointer[DIRSIZ] = 0; // Chốt đuôi chuỗi bằng ký tự NULL
++
++            struct stat st_child;
++            // Lấy thông tin (stat) của file con vừa ghép được
++            if(stat(buffer, &st_child) < 0){
++                fprintf(2, "tree: cannot stat %s\n", buffer);
++                continue;
++            }
++
++            for(int i = 0; i < depth; i++) {
++                printf("  "); // In 2 dấu cách cho mỗi cấp độ
++            }
++
++            // Bước 5: Kiểm tra xem file con này là thư mục hay file bình thường
++            // T_DIR nghĩa là nó là một thư mục, còn nếu không phải T_DIR thì coi như là file bình thường
++            if(st_child.type == T_DIR){
++                // Nếu là thư mục: In tên kèm dấu '/', sau đó gọi đệ quy để đi sâu vào trong
++                printf("%s/\n", dir_entry.name);
++                
++                // Gọi đệ quy: Truyền đường dẫn 'buffer' mới vào, và tăng độ sâu (depth) lên 1 cấp
++                // depth tăng lên để khi in ra các file con bên trong thư mục này sẽ có thêm khoảng trắng thụt lề
++                tree(buffer, depth + 1);
++            } else {
++                // Nếu chỉ là file bình thường: In cái tên ra là xong
++                printf("%s\n", dir_entry.name);
++            }
++        }
++    }
++    // Đóng thư mục hiện tại sau khi đã quét xong
++    close(file_des);
++}
++
++int main(int argc, char *argv[]) {
++    // Nếu gõ lệnh 'tree' mà không truyền tham số => Mặc định là thư mục hiện tại "."
++    char *path = ".";
++
++    // Nếu có truyền tham số (vd: 'tree a/b') => Lấy tham số ở vị trí số 1 (argv[1])
++    if(argc > 1){
++        path = argv[1];
++    }
++
++    struct stat st;
++    if (stat(path, &st) < 0) {
++        fprintf(2, "tree: cannot stat %s\n", path);
++        exit(1);
++    }
++
++    // In cái tên của thư mục/file gốc ra đầu tiên (kèm dấu '/' nếu nó là thư mục)
++    if (st.type == T_DIR) {
++        printf("%s/\n", path);
++    } else {
++        printf("%s\n", path);
++    }
++
++    // Nếu cái đỉnh đó thực sự là thư mục, thì kích hoạt hàm đệ quy để quét các nhánh
++    // Bắt đầu với mức độ thụt lề (depth) là 1
++    if (st.type == T_DIR) {
++        tree(path, 1);
++    }
++
++    exit(0);
++}
+\ No newline at end of file
+diff --git a/user/user.h b/user/user.h
+index f16fe27..e13fbf1 100644
+--- a/user/user.h
++++ b/user/user.h
+@@ -1,4 +1,7 @@
+ struct stat;
++struct procinfo;
++
++typedef unsigned int   uint;
+ 
+ // system calls
+ int fork(void);
+@@ -22,6 +25,7 @@ int getpid(void);
+ char* sbrk(int);
+ int sleep(int);
+ int uptime(void);
++int trace(int); //add
+ 
+ // ulib.c
+ int stat(const char*, struct stat*);
+@@ -41,3 +45,5 @@ void *memcpy(void *, const void *, uint);
+ // umalloc.c
+ void* malloc(uint);
+ void free(void*);
++
++int getproc(int pid, struct procinfo *info);
+\ No newline at end of file
+diff --git a/user/usys.pl b/user/usys.pl
+index 01e426e..9bb65a6 100755
+--- a/user/usys.pl
++++ b/user/usys.pl
+@@ -36,3 +36,5 @@ entry("getpid");
+ entry("sbrk");
+ entry("sleep");
+ entry("uptime");
++entry("trace");
++entry("getproc");
+diff --git a/user/xargs.c b/user/xargs.c
+new file mode 100644
+index 0000000..7f357f9
+--- /dev/null
++++ b/user/xargs.c
+@@ -0,0 +1,90 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++#include "kernel/param.h"
++
++//argc (Argument Count): Số lượng tham số.
++//argv (Argument Vector): Mảng chứa các tham số. 
++
++int main(int argc, char *argv[]) {
++    // BƯỚC 1: KIỂM TRA ĐẦU VÀO
++    // Phải có ít nhất 2 tham số. Ví dụ: gọi 'xargs echo' thì argc là 2.
++    // Nếu chỉ gọi mỗi 'xargs' (argc < 2) thì báo lỗi và thoát.
++    if (argc < 2) {
++        fprintf(2, "Usage: xargs command [args...]\n");
++        exit(1);
++    }
++
++    // BƯỚC 2: CHUẨN BỊ MẢNG CHỨA CÁC THAM SỐ ĐỂ CHẠY LỆNH MỚI
++    // MAXARG là giới hạn số lượng tham số tối đa của hệ điều hành xv6
++    char *cmd_argv[MAXARG]; // cmd_argv sẽ chứa tên lệnh và tất cả tham số gốc + tham số mới ghép từ stdin.
++    int base_argc = 0;     // base_argc là số lượng tham số gốc (bao gồm tên lệnh) mà người dùng đã nhập khi gọi xargs
++
++    // Lấy lệnh người dùng muốn chạy (và các tham số gốc bỏ vào mảng cmd_argv
++    for (int i = 1; i < argc; i++) {
++        cmd_argv[base_argc++] = argv[i]; // Bắt đầu từ argv[1] vì argv[0] là "xargs" rồi
++    }
++
++    // BƯỚC 3: CHUẨN BỊ BỘ NHỚ ĐỂ ĐỌC DỮ LIỆU TỪ STANDARD INPUT
++    char buffer[512];        // Bộ đệm 512 bytes để hứng từng chữ cái người dùng truyền vào
++    int buffer_idx = 0;      // Vị trí index để nhét chữ cái tiếp theo vào 'buffer'
++    char c;               // Biến hứng từng ký tự (A, B, C, dấu cách, dấu xuống dòng...)
++
++    int curr_argc = base_argc; // Số lượng tham số hiện tại (bắt đầu bằng số lượng tham số gốc)
++    char *curr_arg = buffer; // Trỏ vào đầu chữ đang được ghép trong bộ đệm
++
++    // BƯỚC 4: VÒNG LẶP ĐỌC LIÊN TỤC TỪ STDIN (File descriptor 0)
++    // read(0, &c, 1) sẽ đọc 1 ký tự từ bàn phím hoặc từ lệnh đứng trước dấu '|', và lưu vào biến 'c'.
++    while (read(0, &c, 1) == 1) {
++        
++        // LUỒNG 1: NẾU GẶP DẤU CÁCH HOẶC XUỐNG DÒNG => ĐÃ GHÉP XONG 1 TỪ
++        if (c == ' ' || c == '\n') {
++            
++            // Chốt đuôi chữ vừa ghép bằng ký tự '\0' (để C hiểu đây là kết thúc chuỗi)
++            buffer[buffer_idx++] = '\0'; 
++
++            // Kiểm tra xem chữ vừa ghép có bị rỗng không (tránh trường hợp gõ 2 dấu cách liên tiếp)
++            if (*curr_arg != '\0') {
++                // Nhét chữ vừa ghép xong vào danh sách tham số để chuẩn bị chạy
++                cmd_argv[curr_argc++] = curr_arg;
++            }
++
++            // Nếu là dấu xuống dòng => Đã hết 1 dòng, đem các tham số đi chạy lệnh thôi!
++            if (c == '\n') {
++                // Quy tắc của hàm exec: phần tử cuối cùng của mảng tham số phải là 0 (NULL)
++                cmd_argv[curr_argc] = 0; 
++
++                // TẠO TIẾN TRÌNH CON ĐỂ CHẠY LỆNH (Tránh làm chết tiến trình xargs hiện tại)
++                if (fork() == 0) {
++                    // LUỒNG CỦA CON: Gọi hàm exec để "biến hình" thành lệnh mới
++                    // Tham số 1: Tên lệnh (cmd_argv[0])
++                    // Tham số 2: Toàn bộ mảng tham số (cmd_argv)
++                    exec(cmd_argv[0], cmd_argv);
++                    
++                    // Nếu exec chạy thành công, nó sẽ không bao giờ chạy xuống dòng dưới này.
++                    // Nên nếu chạy tới đây tức là lỗi (lệnh không tồn tại).
++                    fprintf(2, "exec failed\n");
++                    exit(1);
++                } else {
++                    // LUỒNG CỦA CHA: Đứng chờ tiến trình con chạy xong thì mới làm tiếp
++                    wait(0);
++                }
++
++                // CHẠY XONG RỒI => RESET LẠI MỌI THỨ ĐỂ ĐỌC DÒNG TIẾP THEO
++                buffer_idx = 0;                  // Xóa trắng bộ đệm
++                curr_argc = base_argc;        // Xóa các tham số cũ, chỉ giữ lại lệnh gốc
++                curr_arg = buffer;               // Quay đầu con trỏ về vị trí xuất phát
++            } else {
++                // Nếu chỉ là dấu cách (chưa xuống dòng) => Trỏ 'curr_arg' tới vị trí chữ cái tiếp theo
++                curr_arg = &buffer[buffer_idx];
++            }
++        } 
++        // LUỒNG 2: NẾU LÀ CHỮ CÁI BÌNH THƯỜNG (A, B, C, 1, 2, 3...)
++        else {
++            // Cứ nhét chữ cái đó vào bộ đệm tạm để ghép từ từ thành một từ hoàn chỉnh
++            buffer[buffer_idx++] = c;
++        }
++    } // Hết vòng lặp (Hết dữ liệu đầu vào)
++
++    exit(0); // Kết thúc xargs thành công
++}
+\ No newline at end of file
