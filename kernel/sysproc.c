@@ -98,75 +98,15 @@ uint64
 sys_trace(void)
 {
   int mask;
-  argint(0, &mask);
+  //lay mask tu user space
+  argint(0, &mask); // ham doc integer 
+
+  //luu mask vao struct proc cua process hien tai
+  //tracemake dc kiem tra rrong syscall() de in ra dong trace va copy sang tien trinh con khi goi fork
   myproc()->tracemask = mask;
   return 0;
 }
-// /// @brief Get process information base on PID provided by User
-// /// @param pid Process ID
-// /// @param info_addr Address to store process information
-// /// @return 0 on success, -1 on failure
-// uint64 sys_getproc(void){
-//   int pid; // Process ID
-//   uint64 info_addr; // Address to store process information
-//   struct procinfo info; // Struct to hold process information
 
-//   argint(0, &pid); // Get the PID address provided by User
-//   // Khi bạn truyền một struct hoặc một mảng từ User vào Kernel 
-//   // bạn không truyền cả khối dữ liệu đó được. Bạn chỉ truyền địa chỉ của con trỏ của khối dữ liệu đó
-//   // Kernel sẽ sử dụng địa chỉ đó để copy dữ liệu từ User space vào Kernel space hoặc ngược lại. bằng copyin hoặc copyout
-//   argaddr(1, &info_addr); // Struct procinfo address provided by user will be stored in info_addr
-
-//   struct proc *p = myproc(); // Get the current process
-//   struct proc *target = 0; // Pointer to the target process whose information we want to get
-
-//   //acquire(&p -> lock);
-//   // Giữ lock của process hiện tại để đảm bảo an toàn khi truy cập thông tin process
-//   // Khi một CPU gọi lệnh acquire, nó sẽ kiểm tra xem lock đã được giữ bởi một CPU khác chưa. 
-//   //Nếu lock đã được giữ, CPU sẽ bị chặn (blocked) cho đến khi lock được giải phóng. 
-//   //Khi lock được giải phóng, một trong số các CPU đang chờ sẽ được chọn để tiếp tục và giữ lock đó. 
-//   //Điều này đảm bảo rằng chỉ có một CPU có thể giữ lock tại một thời điểm, 
-//   //giúp tránh xung đột và đảm bảo tính nhất quán của dữ liệu khi nhiều CPU truy cập cùng một tài nguyên. 
-
-//   // Tìm process có PID bằng với PID mà User truyền lên trong hệ thống
-//   // Duyệt qua danh sách process của hệ thống để tìm process có PID bằng với PID mà User truyền lên
-//   // struct proc *pp = p: khởi tạo con trỏ pp trỏ đến process hiện tại p.
-//   // pp != 0: điều kiện tiếp tục vòng lặp, đảm bảo rằng pp không phải là con trỏ null (tức là vẫn còn process để kiểm tra).
-//   // pp = pp->parent: sau mỗi lần lặp, con trỏ pp sẽ nhảy lên một nấc cao hơn trong cây process, 
-//   // tức là sẽ kiểm tra process cha của process hiện tại.
-//   for(struct proc *pp = p; pp < &proc[NPROC]; pp = pp -> parent){
-//     acquire(&pp -> lock); // Giữ lock của process pp để đảm bảo an toàn khi truy cập thông tin process pp
-//     if(pp -> pid == pid){ // Nếu tìm thấy process có PID bằng với PID mà User truyền lên
-//       target = pp; // Gán con trỏ target trỏ đến process đó
-//       // Nếu tìm thấy process có PID bằng với PID mà User truyền lên,
-//       // Gán thông tin của process đó vào struct procinfo info
-//       info.pid = target -> pid;
-//       info.ppid = target -> parent ? target -> parent -> pid : -1;
-//       info.state = target -> state;
-//       info.sz = target -> sz;
-//       safestrcpy(info.name, target -> name, sizeof(info.name)); // Sao chép tên process vào struct procinfo, đảm bảo không tràn bộ nhớ
-//       break; 
-//     }
-//     release(&pp -> lock); // Giải phóng lock của process pp sau khi đã lấy thông tin
-//   }
-//   if(target == 0){
-//     //release(&p -> lock);
-//     return -1;
-//   }
- 
-//   //release(&p -> lock);
-
-//   // p -> pagetable: bảng trang của process hiện tại, được sử dụng để xác định cách ánh xạ địa chỉ ảo sang địa chỉ vật lý.
-//   // info_addr: địa chỉ trong không gian người dùng nơi struct procinfo sẽ được sao chép đến.
-//   // (char *)&info: địa chỉ của struct procinfo trong kernel, được chuyển đổi thành con trỏ char để phù hợp với kiểu dữ liệu mà copyout yêu cầu.
-//   // sizeof(info): kích thước của struct procinfo, được sử dụng để xác định lượng dữ liệu cần sao chép 
-//   // đảm bảo rằng không có tràn bộ nhớ khi sao chép dữ liệu từ kernel space sang user space.
-//   if(copyout(p -> pagetable, info_addr, (char *)&info, sizeof(info)) < 0){
-//     return -1; // Nếu có lỗi khi sao chép thông tin về user space, trả về -1
-//   }
-  
-//   return 0;
-// }
 
 uint64
 sys_getproc(void)
