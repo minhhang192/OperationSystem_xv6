@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
 
         if (buffer[i] == '\n') 
         {
-            buffer[i] = '\0';  // kết thúc chuỗi tại vị trí ngắt dòng
+            buffer[i] = '\0';  // kết thúc chuỗi t  ại vị trí ngắt dòng
 
             cmd_argv[base_argc] = buffer; // thêm dòng vừa đọc (từ stdin) làm tham số cuối cho lệnh
             cmd_argv[base_argc + 1] = 0; // kết thúc argv bằng NULL theo yêu cầu của exec
