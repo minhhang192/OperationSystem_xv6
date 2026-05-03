@@ -446,40 +446,37 @@ bmap(struct inode *ip, uint bn)
 
       int idx1 = bn / NINDIRECT;
 
-    if((addr2 = a1[idx1]) == 0){
-      addr2 = balloc(ip->dev);
-      if(addr2){
+      if((addr2 = a1[idx1]) == 0){
+        addr2 = balloc(ip->dev);
+        if(addr2 == 0) {
+          brelse(bp1);
+          return 0;
+        }
         a1[idx1] = addr2;
         log_write(bp1); // ghi thay đổi vào log
       }
-    }
 
-    if(addr2 == 0) {
-      brelse(bp1);
-      return 0;
-    }
-
-    brelse(bp1);
     // --- Bước 3c: Load singly-indirect block và tìm data block ---
     // bn % NINDIRECT = index vào singly-indirect block
     // Ví dụ: bn=300 → 300%256 = 44 → lấy data block thứ 44
     
-    bp2 = bread(ip->dev, addr2);
-    a2 = (uint*)bp2->data;
+      bp2 = bread(ip->dev, addr2);
+      a2 = (uint*)bp2->data;
 
-    int idx2 = bn % NINDIRECT;
+      int idx2 = bn % NINDIRECT;
 
-    if((addr = a2[idx2]) == 0){
-      addr = balloc(ip->dev);
-      if(addr){
-        a2[idx2] = addr;
-        log_write(bp2);
+      if((addr = a2[idx2]) == 0){
+        addr = balloc(ip->dev);
+        if(addr){
+          a2[idx2] = addr;
+          log_write(bp2);
+        }
       }
-    }
 
-    brelse(bp2);
-    return addr;
-  }   
+      brelse(bp2);
+      brelse(bp1);
+      return addr;
+    }   
 
   panic("bmap: out of range");
 }
