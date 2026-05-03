@@ -2,6 +2,9 @@
 #include "kernel/stat.h"
 #include "kernel/fcntl.h"
 #include "user/user.h"
+#include "kernel/memlayout.h"
+#include "kernel/usyscall.h"
+#include "kernel/riscv.h"
 
 //
 // wrapper so that it's OK if main() does not call exit().
@@ -144,4 +147,10 @@ void *
 memcpy(void *dst, const void *src, uint n)
 {
   return memmove(dst, src, n);
+}
+
+int ugetpid(void){
+  struct usyscall *u = (struct usyscall*) USYSCALL;
+  int result = u->pid;
+  return result;
 }

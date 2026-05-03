@@ -195,10 +195,7 @@ UPROGS=\
 	$U/_wc\
 	$U/_zombie\
 	$U/_test_getproc\
-
-
-
-
+	$U/_test_usyscall
 ifeq ($(LAB),syscall)
 UPROGS += \
 	$U/_attack\

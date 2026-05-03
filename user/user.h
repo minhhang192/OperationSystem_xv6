@@ -46,3 +46,4 @@ void* malloc(uint);
 void free(void*);
 
 int getproc(int pid, struct procinfo *info);
+int ugetpid(void);

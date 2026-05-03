@@ -4,6 +4,7 @@
 #include "riscv.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "usyscall.h"
 #include "defs.h"
 
 struct cpu cpus[NCPU];
@@ -123,6 +124,14 @@ allocproc(void)
 
 found:
   p->pid = allocpid();
+  p->usyscall = (struct usyscall*) kalloc();
+
+  if(p->usyscall == 0){
+     p->state = UNUSED;
+     release(&p->lock);
+     return 0;
+  }
+  p->usyscall->pid = p->pid;
   p->state = USED;
 
   // Allocate a trapframe page.
@@ -169,6 +178,8 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  kfree((void*)p->usyscall);
+  p->usyscall = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -202,6 +213,13 @@ proc_pagetable(struct proc *p)
     return 0;
   }
 
+   if(mappages(pagetable, USYSCALL, PGSIZE, (uint64)(p->usyscall), PTE_R | PTE_U) < 0){
+    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+    uvmunmap(pagetable, TRAPFRAME, 1, 0);
+    uvmfree(pagetable, 0);
+    return 0;
+  }
+
   return pagetable;
 }
 
@@ -212,7 +230,9 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
+  uvmunmap(pagetable, USYSCALL, 1, 0);
   uvmfree(pagetable, sz);
+
 }
 
 // a user program that calls exec("/init")
