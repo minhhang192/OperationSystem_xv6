@@ -59,3 +59,5 @@ int statistics(void*, int);
 // umalloc.c
 void* malloc(uint);
 void free(void*);
+
+int ugetpid(void);
