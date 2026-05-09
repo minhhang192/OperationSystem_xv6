@@ -14,9 +14,15 @@ void tree(char *path, int depth) {
     struct stat st;   // Cấu trúc chứa chi tiết xem nó là file hay thư mục (stat)
 
     // Bước 1: mở thư mục hiện tại (path) để bắt đầu đọc thông tin bên trong
+
+    if(depth > 20){
+        fprintf(2, "tree: too deep\n"); // stack overflow nếu đệ quy quá sâu
+        return;
+    }
+
     if((file_des = open(path, 0)) < 0){
         fprintf(2, "tree: cannot open %s\n", path);
-        exit(1); 
+        return; 
     }
 
     // Bước 2: kiểm tra thông tin của thư mục hiện tại để biết nó có phải là thư mục hay không
@@ -26,65 +32,63 @@ void tree(char *path, int depth) {
         return;
     }
 
-    // Bước 3: nếu nó là thư mục thì mới bắt đầu đọc thông tin của các file con bên trong
-    if(st.type == T_DIR){
-        
-        // nếu đường dẫn lồng nhau quá sâu sẽ làm tràn bộ nhớ
-        if(strlen(path) + 1 + DIRSIZ + 1 > sizeof(buffer)){
-            printf("tree: path too long\n");
-            close(file_des);    
-            return;
+    // Bước 3: bắt đầu đọc thông tin của các file con bên trong
+    // nếu đường dẫn lồng nhau quá sâu sẽ làm tràn bộ nhớ
+    if(strlen(path) + 1 + DIRSIZ + 1 > sizeof(buffer)){
+        fprintf(2, "tree: path too long\n");
+        close(file_des);    
+        return;
+    }
+
+    // vd "a" => "a/"
+    strcpy(buffer, path);
+    pointer = buffer + strlen(buffer);
+    *pointer++ = '/'; // Chèn dấu '/' vào cuối và nhích con trỏ p lên 1 nấc
+
+    // Bước 4: đọc thông tin của từng file con bên trong thư mục hiện tại
+    // dir_entry sẽ chứa thông tin của từng file con (như tên, số inum...)
+    while(read(file_des, &dir_entry, sizeof(dir_entry)) == sizeof(dir_entry)){
+        // inum == 0 nghĩa là file này đã bị xóa
+        if(dir_entry.inum == 0)
+            continue;
+
+        // bỏ qua "." (Thư mục hiện hành) và ".." (Thư mục cha)
+        if(strcmp(dir_entry.name, ".") == 0 || strcmp(dir_entry.name, "..") == 0)
+            continue;
+
+        // dán tên file con vào sau dấu '/'
+        // vd: a/ + tên file con là "b" thành "a/b"
+        char name[DIRSIZ + 1];
+        memset(name, 0, sizeof(name));
+        memmove(name, dir_entry.name, DIRSIZ); // name   = "veryverylongfi\0"  dir_entry.name = "veryverylongfi"
+        // không dùng dir_entry.name trực tiếp vì nó có thể không kết thúc bằng null character '\0' nếu tên file dài hơn DIRSIZ
+        // printf sẽ tiếp tục đọc bộ nhớ sau đó cho đến khi gặp '\0' nên có thể in ra những ký tự rác nếu tên file dài hơn DIRSIZ
+        memmove(pointer, name, DIRSIZ + 1);  // buffer = "a/veryverylongfi\0"
+
+        struct stat st_child;
+        // lấy thông tin (stat) của file con vừa ghép được
+        if(stat(buffer, &st_child) < 0){
+            fprintf(2, "tree: cannot stat %s\n", buffer);
+            continue;
         }
 
-        // vd "a" => "a/"
-        strcpy(buffer, path);
-        pointer = buffer + strlen(buffer);
-        *pointer++ = '/'; // Chèn dấu '/' vào cuối và nhích con trỏ p lên 1 nấc
-
-        // Bước 4: đọc thông tin của từng file con bên trong thư mục hiện tại
-        // dir_entry sẽ chứa thông tin của từng file con (như tên, số inum...)
-        while(read(file_des, &dir_entry, sizeof(dir_entry)) == sizeof(dir_entry)){
-            // inum == 0 nghĩa là file này đã bị xóa
-            if(dir_entry.inum == 0)
-                continue;
-
-            // bỏ qua "." (Thư mục hiện hành) và ".." (Thư mục cha)
-            if(strcmp(dir_entry.name, ".") == 0 || strcmp(dir_entry.name, "..") == 0)
-                continue;
-
-            // dán tên file con vào sau dấu '/'
-            // vd: a/ + tên file con là "b" thành "a/b"
-            char name[DIRSIZ + 1];
-            memset(name, 0, sizeof(name));
-            memmove(name, dir_entry.name, DIRSIZ); // name   = "veryverylongfi\0"  dir_entry.name = "veryverylongfi"
-            // không dùng dir_entry.name trực tiếp vì nó có thể không kết thúc bằng null character '\0' nếu tên file dài hơn DIRSIZ
-            // printf sẽ tiếp tục đọc bộ nhớ sau đó cho đến khi gặp '\0' nên có thể in ra những ký tự rác nếu tên file dài hơn DIRSIZ
-            memmove(pointer, name, DIRSIZ + 1);  // buffer = "a/veryverylongfi\0"
-
-            struct stat st_child;
-            // lấy thông tin (stat) của file con vừa ghép được
-            if(stat(buffer, &st_child) < 0){
-                fprintf(2, "tree: cannot stat %s\n", buffer);
-                continue;
-            }
-
-            for(int i = 0; i < depth; i++) {
-                printf("  "); // in 2 dấu cách cho mỗi cấp thư mục
-            }
-
-            // Bước 5: kiểm tra xem file con này là thư mục hay file bình thường
-            if(st_child.type == T_DIR){
-                // nếu là thư mục thì in tên kèm dấu '/',
-                printf("%s/\n", name);
-                
-                // gọi đệ quy và truyền vào đường dẫn của file con đó và độ sâu tăng lên 1 (depth + 1)
-                // depth tăng lên để khi in ra các file con bên trong thư mục này sẽ có thêm khoảng trắng thụt lề
-                tree(buffer, depth + 1);
-            } else {
-                // file bình thường thì chỉ in tên
-                printf("%s\n", name);
-            }
+        for(int i = 0; i < depth; i++) {
+            printf("  "); // in 2 dấu cách cho mỗi cấp thư mục
         }
+
+        // Bước 5: kiểm tra xem file con này là thư mục hay file bình thường
+        if(st_child.type == T_DIR){
+            // nếu là thư mục thì in tên kèm dấu '/',
+            printf("%s/\n", name);
+            
+            // gọi đệ quy và truyền vào đường dẫn của file con đó và độ sâu tăng lên 1 (depth + 1)
+            // depth tăng lên để khi in ra các file con bên trong thư mục này sẽ có thêm khoảng trắng thụt lề
+            tree(buffer, depth + 1);
+        } else {
+            // file bình thường thì chỉ in tên
+            printf("%s\n", name);
+        }
+
     }
     close(file_des);
 }
