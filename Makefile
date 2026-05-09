@@ -196,7 +196,6 @@ UPROGS=\
 	$U/_zombie\
 	$U/_xargs\
     $U/_tree\
-	$U/_bigfile\
 
 ifeq ($(LAB),syscall)
 UPROGS += \
