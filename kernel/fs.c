@@ -385,7 +385,6 @@ bmap(struct inode *ip, uint bn)
   uint addr, *a;
   struct buf *bp;
 
-  // === Phần 1: Direct blocks (bn = 0..10) ===
   if(bn < NDIRECT){
     if((addr = ip->addrs[bn]) == 0){
       addr = balloc(ip->dev);
@@ -397,7 +396,6 @@ bmap(struct inode *ip, uint bn)
   }
   bn -= NDIRECT;
 
-  // === Phần 2: Singly-indirect blocks (bn = 0..255) ===
   if(bn < NINDIRECT){
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT]) == 0){
@@ -419,61 +417,6 @@ bmap(struct inode *ip, uint bn)
     return addr;
   }
 
-  // === Phần 3: Doubly-indirect blocks (bn = 0..65535) ===
-
-    if(bn < NINDIRECT * NINDIRECT){
-      uint addr1, addr2;
-      uint *a1, *a2;
-      struct buf *bp1, *bp2;
-
-    // --- Bước 3a: Load doubly-indirect block ---
-    // addrs[NDIRECT+1] chứa địa chỉ của doubly-indirect block
-      if((addr1 = ip->addrs[NDIRECT+1]) == 0){
-        addr1 = balloc(ip->dev);
-        if(addr1 == 0)
-          return 0;
-        ip->addrs[NDIRECT+1] = addr1;
-      }
-
-      bp1 = bread(ip->dev, addr1);
-      a1 = (uint*)bp1->data;
-
-    // --- Bước 3b: Tìm singly-indirect block bên trong ---
-    // bn / NINDIRECT = index vào doubly-indirect block
-    // Ví dụ: bn=300 → 300/256 = 1 → lấy indirect block thứ 1
-
-      int idx1 = bn / NINDIRECT;
-
-    if((addr2 = a1[idx1]) == 0){
-      addr2 = balloc(ip->dev);
-      if(addr2){
-        a1[idx1] = addr2;
-        log_write(bp1); // ghi thay đổi vào log
-      }
-    }
-
-    brelse(bp1);
-    // --- Bước 3c: Load singly-indirect block và tìm data block ---
-    // bn % NINDIRECT = index vào singly-indirect block
-    // Ví dụ: bn=300 → 300%256 = 44 → lấy data block thứ 44
-    
-    bp2 = bread(ip->dev, addr2);
-    a2 = (uint*)bp2->data;
-
-    int idx2 = bn % NINDIRECT;
-
-    if((addr = a2[idx2]) == 0){
-      addr = balloc(ip->dev);
-      if(addr){
-        a2[idx2] = addr;
-        log_write(bp2);
-      }
-    }
-
-    brelse(bp2);
-    return addr;
-  }   
-
   panic("bmap: out of range");
 }
 
@@ -483,10 +426,9 @@ void
 itrunc(struct inode *ip)
 {
   int i, j;
-  struct buf *bp, *bp2;
-  uint *a, *a2;
+  struct buf *bp;
+  uint *a;
 
-  // === Giải phóng direct blocks ===
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
       bfree(ip->dev, ip->addrs[i]);
@@ -494,7 +436,6 @@ itrunc(struct inode *ip)
     }
   }
 
-  // === Giải phóng singly-indirect blocks ===
   if(ip->addrs[NDIRECT]){
     bp = bread(ip->dev, ip->addrs[NDIRECT]);
     a = (uint*)bp->data;
@@ -505,32 +446,6 @@ itrunc(struct inode *ip)
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT]);
     ip->addrs[NDIRECT] = 0;
-  }
-  
-  // === Giải phóng doubly-indirect blocks ===
-  if(ip->addrs[NDIRECT+1]){
-    bp = bread(ip->dev, ip->addrs[NDIRECT+1]);
-    a = (uint*)bp->data;
-
-    for(i = 0; i < NINDIRECT; i++){
-      if(a[i]){ // từng singly-indirect block
-        bp2 = bread(ip->dev, a[i]);
-        a2 = (uint*)bp2->data;
-
-        // free data blocks bên trong
-        for(j = 0; j < NINDIRECT; j++){
-          if(a2[j])
-            bfree(ip->dev, a2[j]);
-        }
-
-        brelse(bp2);
-        bfree(ip->dev, a[i]); // free singly-indirect block
-      }
-    }
-
-    brelse(bp);
-    bfree(ip->dev, ip->addrs[NDIRECT+1]); // free doubly-indirect block
-    ip->addrs[NDIRECT+1] = 0;
   }
 
   ip->size = 0;
