@@ -29,6 +29,11 @@ int main(int argc, char *argv[]) {
         cmd_argv[base_argc++] = argv[i];
     }
 
+    if(base_argc + 2 > MAXARG){ // kiểm tra nếu số lượng tham số ban đầu đã gần đạt giới hạn của MAXARG (cần thêm 2 tham số nữa: dòng nhập từ stdin và NULL)
+        fprintf(2, "Too many arguments\n");
+        exit(1);
+    }
+
     char buffer[512]; // mảng để lưu trữ dòng nhập từ stdin được kết thúc bởi "\n"
     int i = 0;
     int n = 0;
@@ -60,8 +65,8 @@ int main(int argc, char *argv[]) {
     if (i > 0) {
         buffer[i] = '\0';
 
-        cmd_argv[base_argc] = buffer;
-        cmd_argv[base_argc + 1] = 0;
+        cmd_argv[base_argc] = buffer; // thêm dòng vừa đọc (từ stdin) làm tham số cuối cho lệnh
+        cmd_argv[base_argc + 1] = 0; // kết thúc argv bằng NULL theo yêu cầu của exec
 
         run(cmd_argv);  
     }

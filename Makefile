@@ -199,9 +199,6 @@ UPROGS=\
     $U/_tree\
 	$U/_test_getproc\
 
-
-
-
 ifeq ($(LAB),syscall)
 UPROGS += \
 	$U/_attack\
