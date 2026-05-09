@@ -54,8 +54,12 @@ void tree(char *path, int depth) {
 
             // dán tên file con vào sau dấu '/'
             // vd: a/ + tên file con là "b" thành "a/b"
-            memmove(pointer, dir_entry.name, DIRSIZ);
-            pointer[DIRSIZ] = 0; // đánh dấu kết thúc chuỗi sau khi dán tên file con vào
+            char name[DIRSIZ + 1];
+            memset(name, 0, sizeof(name));
+            memmove(name, dir_entry.name, DIRSIZ); // name   = "veryverylongfi\0"  dir_entry.name = "veryverylongfi"
+            // không dùng dir_entry.name trực tiếp vì nó có thể không kết thúc bằng null character '\0' nếu tên file dài hơn DIRSIZ
+            // printf sẽ tiếp tục đọc bộ nhớ sau đó cho đến khi gặp '\0' nên có thể in ra những ký tự rác nếu tên file dài hơn DIRSIZ
+            memmove(pointer, name, DIRSIZ + 1);  // buffer = "a/veryverylongfi\0"
 
             struct stat st_child;
             // lấy thông tin (stat) của file con vừa ghép được
@@ -71,14 +75,14 @@ void tree(char *path, int depth) {
             // Bước 5: kiểm tra xem file con này là thư mục hay file bình thường
             if(st_child.type == T_DIR){
                 // nếu là thư mục thì in tên kèm dấu '/',
-                printf("%s/\n", dir_entry.name);
+                printf("%s/\n", name);
                 
                 // gọi đệ quy và truyền vào đường dẫn của file con đó và độ sâu tăng lên 1 (depth + 1)
                 // depth tăng lên để khi in ra các file con bên trong thư mục này sẽ có thêm khoảng trắng thụt lề
                 tree(buffer, depth + 1);
             } else {
                 // file bình thường thì chỉ in tên
-                printf("%s\n", dir_entry.name);
+                printf("%s\n", name);
             }
         }
     }
