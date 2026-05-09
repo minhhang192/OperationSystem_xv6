@@ -454,27 +454,20 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 static void
 vmprint_rec(pagetable_t pagetable, int level)
 {
-  for(int i = 0; i < 512; i++){
+  for(int i = 0; i < 512; i++) {
     pte_t pte = pagetable[i];
     if((pte & PTE_V) == 0)
       continue;
 
     uint64 pa = PTE2PA(pte);
 
-    // Print indentation
     for(int j = 0; j < level; j++)
       printf(" ..");
 
-    
     printf("%d: pte %p pa %p\n", i, (void*)pte, (void*)pa);
-  }
 
-  // Nếu là non-leaf (chỉ có V, không có R/W/X) thì đi sâu hơn
-  // Lưu ý: phải recurse sau khi in xong entry hiện tại
-  for(int i = 0; i < 512; i++){
-    pte_t pte = pagetable[i];
-    if((pte & PTE_V) && (pte & (PTE_R | PTE_W | PTE_X)) == 0){
-      uint64 pa = PTE2PA(pte);
+    // Recurse ngay sau khi in (depth-first)
+    if((pte & (PTE_R | PTE_W | PTE_X)) == 0) {
       vmprint_rec((pagetable_t)pa, level + 1);
     }
   }
