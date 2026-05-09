@@ -162,18 +162,21 @@ void
 syscall(void)
 {
   int num;
-  struct proc *p = myproc();
+  struct proc *p = myproc(); // lay thong tin process hien tai tu cau truc proc
 
-  num = p->trapframe->a7;
+  num = p->trapframe->a7; // a7 chua so hieu cua system call, duoc truyen tu user space khi goi system call
+                          
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
-    // Use num to lookup the system call function for num, call it,
+    // Use num to lookup the system call(kernel/syscall.h)
+    // function for num, call it,
     // and store its return value in p->trapframe->a0
     p->trapframe->a0 = syscalls[num]();
+
     if((p->tracemask & (1 << num)) != 0) {
       printf("%d: syscall %s -> %d\n",
-             p->pid,
+             p->pid, //process id
              sysnames[num] ? sysnames[num] : "unknown",
-             (int)p->trapframe->a0);   
+             (int)p->trapframe->a0); // ket qua tra ve tu system call, duoc truyen tu kernel space ve user space qua a0
     }
   } else {
     printf("%d %s: unknown sys call %d\n",

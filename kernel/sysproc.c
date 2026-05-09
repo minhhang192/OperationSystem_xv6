@@ -98,11 +98,12 @@ uint64
 sys_trace(void)
 {
   int mask;
-  //lay mask tu user space
+  //lay mask tu user spaceS
   argint(0, &mask); // ham doc integer 
 
   //luu mask vao struct proc cua process hien tai
-  //tracemake dc kiem tra rrong syscall() de in ra dong trace va copy sang tien trinh con khi goi fork
+  //tracemake dc kiem tra rrong syscall() de in ra dong
+  // trace va copy sang tien trinh con khi goi fork
   myproc()->tracemask = mask;
   return 0;
 }
