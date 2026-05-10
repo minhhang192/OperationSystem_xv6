@@ -500,12 +500,14 @@ pgpte(pagetable_t pagetable, uint64 va)
 
   return pte;        
 }
+
+
 static void
 vmprint_rec(pagetable_t pagetable, int level)
 {
   for(int i = 0; i < 512; i++) {
     pte_t pte = pagetable[i];
-    if((pte & PTE_V) == 0)
+    if((pte & PTE_V) == 0) //kiem tra bit valid
       continue;
 
     uint64 pa = PTE2PA(pte);
@@ -515,6 +517,7 @@ vmprint_rec(pagetable_t pagetable, int level)
 
     printf("%d: pte %p pa %p\n", i, (void*)pte, (void*)pa);
 
+    // neu k phai leaf thi tiep tuc de quy
     if((pte & (PTE_R | PTE_W | PTE_X)) == 0) {
       vmprint_rec((pagetable_t)pa, level + 1);
     }
