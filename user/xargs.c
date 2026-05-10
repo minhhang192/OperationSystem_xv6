@@ -29,36 +29,33 @@ int main(int argc, char *argv[]) {
         cmd_argv[base_argc++] = argv[i];
     }
 
-    if(base_argc + 2 > MAXARG){ // kiểm tra nếu số lượng tham số ban đầu đã gần đạt giới hạn của MAXARG (cần thêm 2 tham số nữa: dòng nhập từ stdin và NULL)
-        fprintf(2, "Too many arguments\n");
-        exit(1);
-    }
-
-    char buffer[512]; // mảng để lưu trữ dòng nhập từ stdin được kết thúc bởi "\n"
+    char buffer[512]; // lưu từng dòng đọc từ stdin
+    char ch;          // đọc từng ký tự vào đây trước, chưa ghi thẳng vào buffer
     int i = 0;
-    int n = 0;
 
-    while ((n = read(0, &buffer[i], 1)) > 0) {
+    // đọc từng ký tự một từ stdin
+    while (read(0, &ch, 1) > 0) {
 
-        // kiểm tra nếu dòng nhập quá dài sẽ in ra lỗi và thoát chương trình
-        if (i >= sizeof(buffer) - 1) {
-            fprintf(2, "line too long\n");
-            exit(1);
-        }
+        if (ch == '\n') {
+            // gặp ngắt dòng thì kết thúc chuỗi và chạy lệnh
+            buffer[i] = '\0';
 
-        if (buffer[i] == '\n') 
-        {
-            buffer[i] = '\0';  // kết thúc chuỗi tại vị trí ngắt dòng
-
-            cmd_argv[base_argc] = buffer; // thêm dòng vừa đọc (từ stdin) làm tham số cuối cho lệnh
-            cmd_argv[base_argc + 1] = 0; // kết thúc argv bằng NULL theo yêu cầu của exec
-
+            cmd_argv[base_argc] = buffer;
+            cmd_argv[base_argc + 1] = 0;
             
             run(cmd_argv);
 
-            i = 0; // đặt lại chỉ số để đọc dòng tiếp theo
+            i = 0; // reset để đọc dòng tiếp theo
         } else {
-            i++; // tiếp tục đọc ký tự tiếp theo nếu chưa gặp ngắt dòng
+            // chưa gặp ngắt dòng thì kiểm tra trước rồi mới ghi vào buffer
+            // kiểm tra trước khi ghi để tránh ghi tràn buffer
+            // nếu i đã đến sizeof(buffer) - 1 thì không còn chỗ cho '\0' nữa
+            if (i >= sizeof(buffer) - 1) {
+                fprintf(2, "line too long\n");
+                exit(1);
+            }
+
+            buffer[i++] = ch; // an toàn rồi mới ghi
         }
     }
     // xử lý dòng cuối nếu không kết thúc bằng ngắt dòng
