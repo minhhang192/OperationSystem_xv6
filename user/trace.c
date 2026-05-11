@@ -24,7 +24,7 @@ main(int argc, char *argv[])
   for(i = 2; i < argc && i < MAXARG; i++){
     nargv[i-2] = argv[i];
   }
-  nargv[argc-2] = 0;   // null terminate
+  nargv[argc-2] = 0;   //them null vao cuoi mang de ket thuc mang
 
   exec(argv[2], nargv);   // chạy chương trình được trace
   fprintf(2, "trace: exec failed\n");
